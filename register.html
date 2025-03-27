@@ -1,0 +1,32 @@
+<!-- Inside your registration form -->
+<div id="tournament-info" class="tournament-info-box">
+    <!-- Tournament info will appear here -->
+</div>
+
+<form id="regForm">
+    <input type="hidden" id="reg-type" name="reg-type">
+    
+    <!-- Individual Fields -->
+    <div id="individual-fields" class="reg-section">
+        <!-- Individual player fields here -->
+    </div>
+    
+    <!-- Team Fields -->
+    <div id="team-fields" class="reg-section">
+        <!-- Team leader fields -->
+        <div id="team-members"></div>
+        <button type="button" id="add-member">Add Team Member</button>
+    </div>
+    
+    <!-- Duo Fields -->
+    <div id="duo-fields" class="reg-section">
+        <!-- Duo player fields -->
+    </div>
+    
+    <div class="form-group">
+        <input type="checkbox" id="terms" required>
+        <label for="terms">I agree to the terms</label>
+    </div>
+    
+    <button type="submit">Complete Registration</button>
+</form>

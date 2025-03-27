@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournaments | NEXUS Free Fire</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div id="branding">
+                <h1><span class="highlight">NEXUS</span> Free Fire</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li class="current"><a href="tournaments.html">Tournaments</a></li>
+                    <li><a href="register.html">Register</a></li>
+                    <li><a href="contact.html">Contact</a></li>
+                    <li><a href="dashboard.html" class="admin-btn">Admin</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <section id="tournaments">
+        <div class="container">
+            <h1>Upcoming Tournaments</h1>
+            
+            <div class="tournament-cards" id="upcoming-tournaments">
+                <!-- Will be populated by JavaScript -->
+                <p>Loading tournaments...</p>
+            </div>
+            
+            <div class="past-tournaments">
+                <h2>Past Tournament Results</h2>
+                <table id="past-tournaments-table">
+                    <thead>
+                        <tr>
+                            <th>Tournament</th>
+                            <th>Date</th>
+                            <th>Winner</th>
+                            <th>Prize</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>NEXUS Free Fire Tournaments, Copyright &copy; 2023</p>
+    </footer>
+
+    <script type="module">
+        import { database, ref, onValue } from './js/firebase.js';
+        
+        // Load tournaments from Firebase
+        const tournamentsRef = ref(database, 'tournaments');
+        onValue(tournamentsRef, (snapshot) => {
+            const upcomingContainer = document.getElementById('upcoming-tournaments');
+            const pastContainer = document.getElementById('past-tournaments-table').querySelector('tbody');
+            
+            let upcomingHTML = '';
+            let pastHTML = '';
+            const now = new Date();
+            
+            snapshot.forEach((childSnapshot) => {
+                const tournament = childSnapshot.val();
+                tournament.id = childSnapshot.key;
+                
+                const startDate = new Date(tournament.startDate);
+                const formattedDate = startDate.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                if (tournament.status === 'upcoming' || startDate > now) {
+                    upcomingHTML += `
+                        <div class="tournament-card ${tournament.featured ? 'featured' : ''}">
+                            <div class="card-header">
+                                <h3>${tournament.name}</h3>
+                                <span class="date">${formattedDate}</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="prize-pool">
+                                    <span class="prize">$${tournament.prizePool?.toLocaleString() || '0'}</span>
+                                    <span class="label">Prize Pool</span>
+                                </div>
+                                <ul class="details">
+                                    <li><strong>Format:</strong> ${formatTournamentType(tournament.type)}</li>
+                                    <li><strong>Players:</strong> ${tournament.participants || 0}/${tournament.maxParticipants || 100}</li>
+                                    <li><strong>Entry:</strong> ${tournament.entryFee > 0 ? '$' + tournament.entryFee : 'Free'}</li>
+                                </ul>
+                            </div>
+                            <div class="card-footer">
+                                <a href="register.html?tournament=${tournament.id}" class="button_1">Register Now</a>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    pastHTML += `
+                        <tr>
+                            <td>${tournament.name}</td>
+                            <td>${formattedDate}</td>
+                            <td>${tournament.winner || 'TBD'}</td>
+                            <td>$${tournament.prizePool?.toLocaleString() || '0'}</td>
+                        </tr>
+                    `;
+                }
+            });
+            
+            upcomingContainer.innerHTML = upcomingHTML || '<p>No upcoming tournaments scheduled</p>';
+            pastContainer.innerHTML = pastHTML || '<tr><td colspan="4">No past tournaments available</td></tr>';
+        });
+        
+        function formatTournamentType(type) {
+            switch(type) {
+                case 'solo': return 'Solo';
+                case 'duo': return 'Duo';
+                case 'squad': return 'Squad (4 players)';
+                default: return type;
+            }
+        }
+    </script>
+</body>
+</html>
