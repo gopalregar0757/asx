@@ -1,110 +1,131 @@
-import { database, ref, push, set, get, onValue } from './firebase.js';
+import { database, ref, push, set, get } from './firebase.js';
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Get tournament ID from URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const tournamentId = urlParams.get('tournament');
+document.addEventListener('DOMContentLoaded', async () => {
+  // Get tournament ID from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const tournamentId = urlParams.get('tournament');
+  
+  if (!tournamentId) {
+    alert('Invalid tournament link');
+    window.location.href = 'tournaments.html';
+    return;
+  }
 
-    if (!tournamentId) {
-        alert('No tournament specified! Please register from the tournaments page.');
-        window.location.href = 'tournaments.html';
-        return;
-    }
+  // Load tournament data
+  const tournament = await getTournament(tournamentId);
+  if (!tournament) return;
 
-    // Load tournament data
-    const tournamentRef = ref(database, `tournaments/${tournamentId}`);
-    onValue(tournamentRef, (snapshot) => {
-        const tournament = snapshot.val();
-        if (!tournament) {
-            alert('Tournament not found!');
-            window.location.href = 'tournaments.html';
-            return;
-        }
+  // Setup form based on tournament type
+  setupForm(tournament);
 
-        // Display tournament info
-        document.getElementById('tournament-info').innerHTML = `
-            <h2>Registering for: ${tournament.name}</h2>
-            <p><strong>Type:</strong> ${tournament.type.toUpperCase()} | 
-            <strong>Date:</strong> ${new Date(tournament.startDate).toLocaleDateString()} | 
-            <strong>Prize:</strong> $${tournament.prizePool || 0}</p>
-            <hr>
-        `;
-
-        // Set form type based on tournament
-        const regType = tournament.type === 'solo' ? 'individual' : 
-                       tournament.type === 'duo' ? 'duo' : 'team';
-        document.getElementById('reg-type').value = regType;
-
-        // Show correct form section
-        document.querySelectorAll('.reg-section').forEach(el => el.style.display = 'none');
-        document.getElementById(`${regType}-fields`).style.display = 'block';
-    });
-
-    // Team member management
-    let memberCount = 0;
-    document.getElementById('add-member')?.addEventListener('click', function() {
-        const maxMembers = 3; // 1 leader + 3 members = 4 total for squad
-        if (memberCount >= maxMembers) {
-            alert('Maximum team members reached!');
-            return;
-        }
-        
-        memberCount++;
-        const memberDiv = document.createElement('div');
-        memberDiv.className = 'team-member';
-        memberDiv.innerHTML = `
-            <h4>Member ${memberCount}</h4>
-            <div class="form-group">
-                <input type="text" placeholder="Member Name" name="member${memberCount}-name" required>
-            </div>
-            <div class="form-group">
-                <input type="text" placeholder="IGN" name="member${memberCount}-ign" required>
-            </div>
-            <div class="form-group">
-                <input type="text" placeholder="UID" name="member${memberCount}-id" required>
-            </div>
-            <hr>
-        `;
-        document.getElementById('team-members').appendChild(memberDiv);
-    });
-
-    // Form submission
-    document.getElementById('regForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        try {
-            // Basic validation
-            if (!document.getElementById('terms').checked) {
-                throw new Error('You must agree to the terms');
-            }
-
-            // Prepare registration data
-            const formData = new FormData(e.target);
-            const registration = {
-                timestamp: new Date().toISOString(),
-                tournamentId: tournamentId
-            };
-
-            // Process form data
-            for (const [key, value] of formData.entries()) {
-                if (value) registration[key] = value;
-            }
-
-            // Save to Firebase
-            const newRegRef = push(ref(database, `registrations/${tournamentId}`));
-            await set(newRegRef, registration);
-            
-            // Update participant count
-            const tournamentRef = ref(database, `tournaments/${tournamentId}/participants`);
-            const currentCount = (await get(tournamentRef)).val() || 0;
-            await set(tournamentRef, currentCount + 1);
-
-            alert('Registration successful!');
-            window.location.href = 'tournaments.html';
-            
-        } catch (error) {
-            console.error('Registration error:', error);
-            alert(`Registration failed: ${error.message}`);
-        }
-    });
+  // Handle form submission
+  document.getElementById('regForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await submitRegistration(tournamentId, tournament.type);
+  });
 });
+
+async function getTournament(tournamentId) {
+  try {
+    const snapshot = await get(ref(database, `tournaments/${tournamentId}`));
+    if (!snapshot.exists()) {
+      alert('Tournament not found!');
+      window.location.href = 'tournaments.html';
+      return null;
+    }
+    return snapshot.val();
+  } catch (error) {
+    console.error("Error loading tournament:", error);
+    alert('Error loading tournament data');
+    return null;
+  }
+}
+
+function setupForm(tournament) {
+  // Display tournament info
+  document.getElementById('tournament-info').innerHTML = `
+    <h2>${tournament.name}</h2>
+    <p><strong>Type:</strong> ${tournament.type.toUpperCase()} 
+    | <strong>Date:</strong> ${new Date(tournament.startDate).toLocaleDateString()}
+    | <strong>Prize:</strong> $${tournament.prizePool || 0}</p>
+  `;
+
+  // Set form type
+  const formType = tournament.type === 'solo' ? 'individual' : 
+                 tournament.type === 'duo' ? 'duo' : 'team';
+  document.getElementById('reg-type').value = formType;
+
+  // Show correct form section
+  document.querySelectorAll('.reg-section').forEach(el => el.style.display = 'none');
+  document.getElementById(`${formType}-fields`).style.display = 'block';
+}
+
+async function submitRegistration(tournamentId, tournamentType) {
+  try {
+    // Validate form
+    if (!validateForm(tournamentType)) return;
+
+    // Prepare registration data
+    const registration = {
+      timestamp: new Date().toISOString(),
+      tournamentId: tournamentId,
+      ...collectFormData()
+    };
+
+    // Save to database
+    await saveRegistration(tournamentId, registration);
+    
+    // Update participant count
+    await updateParticipantCount(tournamentId);
+    
+    alert('Registration successful!');
+    window.location.href = 'tournaments.html';
+
+  } catch (error) {
+    console.error("Registration error:", error);
+    alert(`Registration failed: ${error.message}`);
+  }
+}
+
+function validateForm(tournamentType) {
+  // Check required fields
+  const requiredFields = {
+    individual: ['player-name', 'player-ign', 'player-id'],
+    duo: ['player1-name', 'player1-ign', 'player1-id', 'player2-name', 'player2-ign', 'player2-id'],
+    team: ['leader-name', 'leader-ign', 'leader-id']
+  };
+
+  for (const field of requiredFields[tournamentType]) {
+    if (!document.getElementById(field)?.value) {
+      alert(`Please fill all required fields`);
+      return false;
+    }
+  }
+
+  if (!document.getElementById('terms').checked) {
+    alert('You must agree to the terms');
+    return false;
+  }
+
+  return true;
+}
+
+function collectFormData() {
+  const data = {};
+  const form = document.getElementById('regForm');
+  new FormData(form).forEach((value, key) => {
+    if (value) data[key] = value;
+  });
+  return data;
+}
+
+async function saveRegistration(tournamentId, data) {
+  const newRegRef = push(ref(database, `registrations/${tournamentId}`));
+  await set(newRegRef, data);
+}
+
+async function updateParticipantCount(tournamentId) {
+  const countRef = ref(database, `tournaments/${tournamentId}/participants`);
+  const current = (await get(countRef)).val() || 0;
+  await set(countRef, current + 1);
+}
